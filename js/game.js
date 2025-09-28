@@ -2,9 +2,26 @@ game_W = 0, game_H = 0;
 
 var bg_im = new Image();
 bg_im.src = "images/Map2.png";
-SPEED = 1;
-MaxSpeed = 0;
-chX = chY = 1;
+
+// Configurable constants for easy adjustment - CIRCULAR TURNING
+const GAME_CONFIG = {
+    BASE_SPEED: 1.5,
+    MAX_SPEED: 3.0,
+    BOOST_SPEED: 4.5,
+    NORMAL_SPEED: 2.0,
+    TURN_SMOOTHNESS: 0.15,      // Increased from 0.05 for more responsive turning
+    MAX_TURN_SPEED: 0.4,        
+    MOUSE_SENSITIVITY: 60,       
+    VACUUM_RANGE: 1.8,
+    GROWTH_BASE: 1000,
+    GROWTH_EXPONENT: 1/6,
+    MIN_GROWTH_SCORE: 50,
+    TURNING_CIRCLE_SIZE: 0.08   // Increased from 0.02 for faster angle changes
+};
+
+SPEED = GAME_CONFIG.BASE_SPEED;
+MaxSpeed = GAME_CONFIG.MAX_SPEED;
+chX = chY = 0.1;
 mySnake = [];
 FOOD = [];
 NFood = 2000;
@@ -16,6 +33,12 @@ die = false;
 
 Xfocus = Yfocus = 0;
 XX = 0, YY = 0;
+
+// Circular turning variables
+targetChX = 0;
+targetChY = 0;
+currentAngle = 0;           // Current direction angle
+targetAngle = 0;            // Target direction angle
 
 names = ["Ahmed Steinke",
     "Aubrey Brass",
@@ -110,41 +133,44 @@ class game {
         document.addEventListener("touchmove", evt => {
             var y = evt.touches[0].pageY;
             var x = evt.touches[0].pageX;
-            chX = (x - game_W / 2) / 15;
-            chY = (y - game_H / 2) / 15;
+            
+            // Calculate target angle from touch position
+            let touchX = x - game_W / 2;
+            let touchY = y - game_H / 2;
+            targetAngle = Math.atan2(touchY, touchX);
         })
 
         document.addEventListener("touchstart", evt => {
             var y = evt.touches[0].pageY;
             var x = evt.touches[0].pageX;
-            chX = (x - game_W / 2) / 15;
-            chY = (y - game_H / 2) / 15;
-            mySnake[0].speed = 2;
+            let touchX = x - game_W / 2;
+            let touchY = y - game_H / 2;
+            targetAngle = Math.atan2(touchY, touchX);
+            mySnake[0].speed = GAME_CONFIG.BOOST_SPEED;
         })
 
         document.addEventListener("touchend", evt => {
-            mySnake[0].speed = 1;
+            mySnake[0].speed = GAME_CONFIG.NORMAL_SPEED;
         })
     }
 
     listenMouse() {
         document.addEventListener("mousedown", evt => {
-            var x = evt.offsetX == undefined ? evt.layerX : evt.offsetX;
-            var y = evt.offsetY == undefined ? evt.layerY : evt.offsetY;
-            mySnake[0].speed = 2;
+            mySnake[0].speed = GAME_CONFIG.BOOST_SPEED;
         })
 
         document.addEventListener("mousemove", evt => {
             var x = evt.offsetX == undefined ? evt.layerX : evt.offsetX;
             var y = evt.offsetY == undefined ? evt.layerY : evt.offsetY;
-            chX = (x - game_W / 2) / 15;
-            chY = (y - game_H / 2) / 15;
+            
+            // Calculate target angle from mouse position
+            let mouseX = x - game_W / 2;
+            let mouseY = y - game_H / 2;
+            targetAngle = Math.atan2(mouseY, mouseX);
         })
 
         document.addEventListener("mouseup", evt => {
-            var x = evt.offsetX == undefined ? evt.layerX : evt.offsetX;
-            var y = evt.offsetY == undefined ? evt.layerY : evt.offsetY;
-            mySnake[0].speed = 1;
+            mySnake[0].speed = GAME_CONFIG.NORMAL_SPEED;
         })
     }
 
@@ -158,32 +184,53 @@ class game {
 
     update() {
         this.render();
+        this.applyVacuumEffect();
         this.unFood();
         this.changeFood();
         this.changeSnake();
-        this.updateChXY();
+        this.updateCircularTurning(); // New circular turning method
         this.checkDie();
 
-        mySnake[0].dx = chX;
-        mySnake[0].dy = chY;
-        XX += chX * mySnake[0].speed;
-        YY += chY * mySnake[0].speed;
         mySnake[0].v[0].x = XX + game_W / 2;
         mySnake[0].v[0].y = YY + game_H / 2;
     }
 
-    updateChXY() {
-        while (Math.abs(chY) * Math.abs(chY) + Math.abs(chX) * Math.abs(chX) > MaxSpeed * MaxSpeed && chY * chX != 0) {
-            chX /= 1.1;
-            chY /= 1.1;
+    // New method for circular turning like a real train
+    updateCircularTurning() {
+        // Calculate angle difference with proper wrapping
+        let angleDiff = targetAngle - currentAngle;
+        
+        // Normalize angle difference to [-π, π]
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        
+        // Limit the turning speed to create a circular turning radius
+        let maxTurnRate = GAME_CONFIG.TURNING_CIRCLE_SIZE;
+        if (Math.abs(angleDiff) > maxTurnRate) {
+            angleDiff = Math.sign(angleDiff) * maxTurnRate;
         }
-        while (Math.abs(chY) * Math.abs(chY) + Math.abs(chX) * Math.abs(chX) < MaxSpeed * MaxSpeed && chY * chX != 0) {
-            chX *= 1.1;
-            chY *= 1.1;
-        }
-
-        Xfocus += 1.5 * chX * mySnake[0].speed;
-        Yfocus += 1.5 * chY * mySnake[0].speed;
+        
+        // Smoothly adjust current angle - INCREASED TURN SMOOTHNESS
+        currentAngle += angleDiff * (GAME_CONFIG.TURN_SMOOTHNESS * 4); // Made turning faster
+        
+        // Normalize current angle
+        while (currentAngle > Math.PI) currentAngle -= 2 * Math.PI;
+        while (currentAngle < -Math.PI) currentAngle += 2 * Math.PI;
+        
+        // Convert angle to direction vector
+        chX = Math.cos(currentAngle);
+        chY = Math.sin(currentAngle);
+        
+        // Apply speed
+        mySnake[0].dx = chX;
+        mySnake[0].dy = chY;
+        XX += chX * mySnake[0].speed;
+        YY += chY * mySnake[0].speed;
+        
+        // Update camera position
+        Xfocus += chX * mySnake[0].speed * 0.6;
+        Yfocus += chY * mySnake[0].speed * 0.6;
+        
         if (Xfocus < 0)
             Xfocus = bg_im.width / 2 + 22;
         if (Xfocus > bg_im.width / 2 + 22)
@@ -194,11 +241,36 @@ class game {
             Yfocus = 0;
     }
 
+    // New vacuum effect method
+    applyVacuumEffect() {
+        if (mySnake.length <= 0) return;
+        
+        let trainHead = mySnake[0].v[0];
+        let vacuumRange = mySnake[0].size * GAME_CONFIG.VACUUM_RANGE;
+        
+        for (let i = 0; i < FOOD.length; i++) {
+            let food = FOOD[i];
+            let distance = Math.sqrt(
+                (trainHead.x - food.x) * (trainHead.x - food.x) + 
+                (trainHead.y - food.y) * (trainHead.y - food.y)
+            );
+            
+            if (distance < vacuumRange && distance > mySnake[0].size) {
+                // Pull food towards train head
+                let pullStrength = 0.15 * (vacuumRange - distance) / vacuumRange;
+                let dx = (trainHead.x - food.x) / distance;
+                let dy = (trainHead.y - food.y) / distance;
+                
+                food.x += dx * pullStrength * mySnake[0].speed;
+                food.y += dy * pullStrength * mySnake[0].speed;
+            }
+        }
+    }
+
     changeFood() {
         for (let i = 0; i < FOOD.length; i++)
             if (Math.sqrt((mySnake[0].v[0].x - FOOD[i].x) * (mySnake[0].v[0].x - FOOD[i].x) + (mySnake[0].v[0].y - FOOD[i].y) * (mySnake[0].v[0].y - FOOD[i].y)) > sizeMap) {
                 FOOD[i] = new food(this, this.getSize() / (10 + Math.random() * 10), (Math.random() - Math.random()) * sizeMap + mySnake[0].v[0].x, (Math.random() - Math.random()) * sizeMap + mySnake[0].v[0].y);
-                // console.log(FOOD[i]);
             }
     }
 
@@ -254,9 +326,8 @@ class game {
             this.canvas.height = document.documentElement.clientHeight;
             game_W = this.canvas.width;
             game_H = this.canvas.height;
-            SPEED = this.getSize() / 7;
-            SPEED = 1;
-            MaxSpeed = this.getSize() / 7;
+            SPEED = this.getSize() / 10;
+            MaxSpeed = this.getSize() / 8;
             if (mySnake.length == 0)
                 return;
             if (mySnake[0].v != null) {
