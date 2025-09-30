@@ -3,20 +3,20 @@ game_W = 0, game_H = 0;
 var bg_im = new Image();
 bg_im.src = "images/Map2.png";
 
-// Configurable constants for easy adjustment - CIRCULAR TURNING
+// Improved config for better testing
 const GAME_CONFIG = {
     BASE_SPEED: 1.5,
     MAX_SPEED: 3.0,
-    BOOST_SPEED: 4.5,
+    BOOST_SPEED: 4.0,       // Clear boost difference
     NORMAL_SPEED: 2.0,
-    TURN_SMOOTHNESS: 0.15,      // Increased from 0.05 for more responsive turning
-    MAX_TURN_SPEED: 0.4,        
-    MOUSE_SENSITIVITY: 60,       
-    VACUUM_RANGE: 1.8,
+    TURN_SMOOTHNESS: 0.15,
+    MAX_TURN_SPEED: 0.4,
+    MOUSE_SENSITIVITY: 60,
+    VACUUM_RANGE: 1.2,      // Reduced vacuum range
     GROWTH_BASE: 1000,
     GROWTH_EXPONENT: 1/6,
     MIN_GROWTH_SCORE: 50,
-    TURNING_CIRCLE_SIZE: 0.08   // Increased from 0.02 for faster angle changes
+    TURNING_CIRCLE_SIZE: 0.08
 };
 
 SPEED = GAME_CONFIG.BASE_SPEED;
@@ -241,12 +241,12 @@ class game {
             Yfocus = 0;
     }
 
-    // New vacuum effect method
+    // Fixed vacuum effect method - visual pulling instead of instant disappearing
     applyVacuumEffect() {
         if (mySnake.length <= 0) return;
         
         let trainHead = mySnake[0].v[0];
-        let vacuumRange = mySnake[0].size * GAME_CONFIG.VACUUM_RANGE;
+        let vacuumRange = mySnake[0].size * 1.2; // Much smaller range like slither.io
         
         for (let i = 0; i < FOOD.length; i++) {
             let food = FOOD[i];
@@ -255,14 +255,15 @@ class game {
                 (trainHead.y - food.y) * (trainHead.y - food.y)
             );
             
-            if (distance < vacuumRange && distance > mySnake[0].size) {
-                // Pull food towards train head
-                let pullStrength = 0.15 * (vacuumRange - distance) / vacuumRange;
+            // Visual pulling effect - coins move towards train but don't disappear instantly
+            if (distance < vacuumRange && distance > mySnake[0].size * 0.6) {
+                let pullStrength = 0.25 * (vacuumRange - distance) / vacuumRange;
                 let dx = (trainHead.x - food.x) / distance;
                 let dy = (trainHead.y - food.y) / distance;
                 
-                food.x += dx * pullStrength * mySnake[0].speed;
-                food.y += dy * pullStrength * mySnake[0].speed;
+                // Update the base position so the coin gets pulled smoothly
+                food.baseX += dx * pullStrength * mySnake[0].speed;
+                food.baseY += dy * pullStrength * mySnake[0].speed;
             }
         }
     }
@@ -287,7 +288,9 @@ class game {
             return;
         for (let i = 0; i < mySnake.length; i++)
             for (let j = 0; j < FOOD.length; j++) {
-                if ((mySnake[i].v[0].x - FOOD[j].x) * (mySnake[i].v[0].x - FOOD[j].x) + (mySnake[i].v[0].y - FOOD[j].y) * (mySnake[i].v[0].y - FOOD[j].y) < 1.5 * mySnake[i].size * mySnake[i].size) {
+                // More precise collision detection - only when very close to train head
+                let headDistance = (mySnake[i].v[0].x - FOOD[j].x) * (mySnake[i].v[0].x - FOOD[j].x) + (mySnake[i].v[0].y - FOOD[j].y) * (mySnake[i].v[0].y - FOOD[j].y);
+                if (headDistance < 0.8 * mySnake[i].size * mySnake[i].size) {
                     mySnake[i].score += Math.floor(FOOD[j].value);
                     FOOD[j] = new food(this, this.getSize() / (5 + Math.random() * 10), (Math.random() - Math.random()) * 5000 + XX, (Math.random() - Math.random()) * 5000 + YY);
                 }
@@ -326,8 +329,8 @@ class game {
             this.canvas.height = document.documentElement.clientHeight;
             game_W = this.canvas.width;
             game_H = this.canvas.height;
-            SPEED = this.getSize() / 10;
-            MaxSpeed = this.getSize() / 8;
+            SPEED = this.getSize() / 12; // Better zoom level
+            MaxSpeed = this.getSize() / 10; // Better zoom level
             if (mySnake.length == 0)
                 return;
             if (mySnake[0].v != null) {

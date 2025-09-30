@@ -6,6 +6,9 @@ class food {
         this.value = this.size;
         this.x = x;
         this.y = y;
+        this.baseX = x; // Store original position
+        this.baseY = y;
+        this.wiggleTime = Math.random() * 100; // Random start time for wiggle
         this.init();
     }
 
@@ -14,6 +17,12 @@ class food {
     }
 
     draw() {
+        // Add subtle wiggle movement like slither.io
+        this.wiggleTime += 0.05;
+        let wiggleAmount = 2; // Small wiggle distance
+        this.x = this.baseX + Math.sin(this.wiggleTime) * wiggleAmount;
+        this.y = this.baseY + Math.cos(this.wiggleTime * 1.1) * wiggleAmount;
+
         if (this.game.isPoint(this.x, this.y)) {
             this.game.context.beginPath();
             this.game.context.arc(this.x - this.size / 4 - XX, this.y - this.size / 4 - YY, this.size / 2, 0, Math.PI * 2, false);
